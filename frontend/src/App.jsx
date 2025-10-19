@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Toaster, toast } from 'react-hot-toast';
-import io from 'socket.io-client'; // Importa o cliente do Socket.IO
+import io from 'socket.io-client';
 
 import styles from './App.module.css';
 
@@ -10,8 +10,7 @@ import PedidoForm from './components/PedidoForm';
 import PedidoCard from './components/PedidoCard';
 import { useAuth } from './contexts/AuthContext';
 
-
-const socket = io('http://localhost:3333');
+const socket = io(import.meta.env.VITE_API_URL); // Usa a variável de ambiente para a URL
 
 function App() {
   const [pedidos, setPedidos] = useState([]);
@@ -21,56 +20,52 @@ function App() {
   async function fetchPedidos() {
     setIsLoading(true);
     try {
-      const response = await axios.get(${import.meta.env.VITE_API_URL}/pedidos);
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/pedidos`);
       setPedidos(response.data);
     } catch (error) { 
+      // CORREÇÃO AQUI
       console.error("Erro ao buscar os pedidos:", error); 
     } finally {
       setIsLoading(false);
     }
   }
 
-
   useEffect(() => { 
     fetchPedidos(); 
   }, []);
 
- 
   useEffect(() => {
-    
     socket.on('novoPedido', (novoPedido) => {
-      
       setPedidos((listaAtual) => [novoPedido, ...listaAtual]);
-     
-      toast.success(`Novo pedido de "${novoPedido.title}" na comunidade!`, {
-        icon: '🔔',
-      });
+      toast.success(`Novo pedido de "${novoPedido.title}" na comunidade!`, { icon: '🔔' });
     });
-
-    
     return () => {
       socket.off('novoPedido');
     };
-  }, []); 
+  }, []);
 
-  
   async function handleCreatePedido(newPedidoData) {
-    const createPromise = axios.post('http://localhost:3333/pedidos', newPedidoData, {
+    const createPromise = axios.post(`${import.meta.env.VITE_API_URL}/pedidos`, newPedidoData, {
       headers: { Authorization: `Bearer ${token}` }
     });
-
     toast.promise(createPromise, {
       loading: 'Publicando seu pedido...',
       success: 'Pedido publicado com sucesso!',
-      error: 'Erro ao publicar o pedido.',
+      error: (err) => { // CORREÇÃO AQUI
+        console.error("Erro no Toast:", err);
+        return 'Erro ao publicar o pedido.';
+      },
     });
-   
+    try {
+      await createPromise;
+    } catch(error) {
+      console.error("Erro ao criar o pedido:", error);
+    }
   }
 
- 
   async function handleDeletePedido(id) {
     if (window.confirm("Tem certeza que deseja deletar este pedido?")) {
-      const deletePromise = axios.delete(`http://localhost:3333/pedidos/${id}`, {
+      const deletePromise = axios.delete(`${import.meta.env.VITE_API_URL}/pedidos/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       toast.promise(deletePromise, {
@@ -78,14 +73,17 @@ function App() {
         success: 'Pedido deletado com sucesso!',
         error: 'Erro ao deletar o pedido.',
       });
-      await deletePromise;
-      setPedidos(pedidos.filter(pedido => pedido._id !== id));
+      try {
+        await deletePromise;
+        setPedidos(pedidos.filter(pedido => pedido._id !== id));
+      } catch (error) {
+        console.error("Erro ao deletar o pedido:", error);
+      }
     }
   }
 
-  
   async function handleUpdatePedido(id, updatedData) {
-    const updatePromise = axios.put(`http://localhost:3333/pedidos/${id}`, updatedData, {
+    const updatePromise = axios.put(`${import.meta.env.VITE_API_URL}/pedidos/${id}`, updatedData, {
       headers: { Authorization: `Bearer ${token}` }
     });
     toast.promise(updatePromise, {
@@ -93,8 +91,12 @@ function App() {
       success: 'Pedido atualizado com sucesso!',
       error: 'Erro ao atualizar o pedido.',
     });
-    const response = await updatePromise;
-    setPedidos(pedidos.map(p => p._id === id ? response.data : p));
+    try {
+      const response = await updatePromise;
+      setPedidos(pedidos.map(p => p._id === id ? response.data : p));
+    } catch(error) {
+      console.error("Erro ao atualizar o pedido:", error);
+    }
   }
 
   return (
