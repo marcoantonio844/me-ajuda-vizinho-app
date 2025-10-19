@@ -1,17 +1,18 @@
+
 import { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
-// Cria o Contexto
 const AuthContext = createContext();
 
-// Cria o componente Provedor
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const navigate = useNavigate();
+  
+ 
+  const API_URL = import.meta.env.VITE_API_URL;
 
-  // Efeito para carregar dados do localStorage ao iniciar
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     const storedToken = localStorage.getItem('token');
@@ -21,18 +22,14 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  // Função de Login
   const login = async (email, password) => {
     try {
-      const response = await axios.post('http://localhost:3333/users/login', { email, password });
+      const response = await axios.post(`${API_URL}/users/login`, { email, password });
       const { user, token } = response.data;
-      
       setUser(user);
       setToken(token);
-      
       localStorage.setItem('user', JSON.stringify(user));
       localStorage.setItem('token', token);
-      
       navigate('/');
     } catch (error) {
       console.error("Erro no login:", error);
@@ -40,11 +37,9 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // NOVO: Função de Registro
   const register = async (name, email, password) => {
     try {
-        await axios.post('http://localhost:3333/users/register', { name, email, password });
-        // Após o registro, envia o usuário para o login
+        await axios.post(`${API_URL}/users/register`, { name, email, password });
         alert('Conta criada com sucesso! Por favor, faça o login.');
         navigate('/login');
     } catch (error) {
@@ -53,7 +48,6 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Função de Logout
   const logout = () => {
     setUser(null);
     setToken(null);
@@ -63,14 +57,12 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    // Adicionamos 'register' ao valor do contexto
     <AuthContext.Provider value={{ user, token, login, logout, register }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-// Hook customizado para facilitar o uso do contexto
 export function useAuth() {
   return useContext(AuthContext);
 }
