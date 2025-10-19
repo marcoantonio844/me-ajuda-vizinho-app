@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Toaster, toast } from 'react-hot-toast';
@@ -10,15 +9,15 @@ import PedidoForm from './components/PedidoForm';
 import PedidoCard from './components/PedidoCard';
 import { useAuth } from './contexts/AuthContext';
 
-// AQUI ESTÁ A SEGUNDA CORREÇÃO IMPORTANTE
+// A URL da nossa API, vinda das variáveis de ambiente
 const API_URL = import.meta.env.VITE_API_URL;
-const socket = io(API_URL);
 
 function App() {
   const [pedidos, setPedidos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const { user, token } = useAuth();
 
+  // Função para buscar a lista inicial de pedidos
   async function fetchPedidos() {
     setIsLoading(true);
     try {
@@ -31,20 +30,36 @@ function App() {
     }
   }
 
+  // Busca os pedidos quando a página carrega
   useEffect(() => { 
     fetchPedidos(); 
   }, []);
 
+  // --- A LÓGICA DO SOCKET AGORA VIVE DENTRO DE UM useEffect ---
+  // Isso garante que a conexão só será estabelecida no navegador e após o componente montar
   useEffect(() => {
-    socket.on('novoPedido', (novoPedido) => {
-      setPedidos((listaAtual) => [novoPedido, ...listaAtual]);
-      toast.success(`Novo pedido de "${novoPedido.title}" na comunidade!`, { icon: '🔔' });
-    });
-    return () => {
-      socket.off('novoPedido');
-    };
-  }, []);
+    // Só tenta conectar se tivermos a URL da API
+    if (API_URL) {
+      const socket = io(API_URL);
 
+      socket.on('connect', () => {
+        console.log('Conectado ao servidor de Socket.IO!');
+      });
+
+      socket.on('novoPedido', (novoPedido) => {
+        setPedidos((listaAtual) => [novoPedido, ...listaAtual]);
+        toast.success(`Novo pedido de "${novoPedido.title}" na comunidade!`, { icon: '🔔' });
+      });
+
+      // Função de "limpeza": desconecta quando o componente sai da tela
+      return () => {
+        console.log('Desconectando do Socket.IO...');
+        socket.disconnect();
+      };
+    }
+  }, []); // O array vazio garante que rode apenas uma vez
+
+  // Funções de CRUD (sem alterações na lógica, apenas na URL)
   async function handleCreatePedido(newPedidoData) {
     const createPromise = axios.post(`${API_URL}/pedidos`, newPedidoData, {
       headers: { Authorization: `Bearer ${token}` }
@@ -62,9 +77,9 @@ function App() {
         headers: { Authorization: `Bearer ${token}` }
       });
       toast.promise(deletePromise, {
-        loading: 'Deletando pedido...',
-        success: 'Pedido deletado com sucesso!',
-        error: 'Erro ao deletar o pedido.',
+        loading: 'Deletando...',
+        success: 'Deletado com sucesso!',
+        error: 'Erro ao deletar.',
       });
       await deletePromise;
       setPedidos(pedidos.filter(pedido => pedido._id !== id));
@@ -76,9 +91,9 @@ function App() {
       headers: { Authorization: `Bearer ${token}` }
     });
     toast.promise(updatePromise, {
-      loading: 'Salvando alterações...',
-      success: 'Pedido atualizado com sucesso!',
-      error: 'Erro ao atualizar o pedido.',
+      loading: 'Salvando...',
+      success: 'Salvo com sucesso!',
+      error: 'Erro ao salvar.',
     });
     const response = await updatePromise;
     setPedidos(pedidos.map(p => p._id === id ? response.data : p));
@@ -86,10 +101,30 @@ function App() {
 
   return (
     <div className={styles.container}>
-      {/* ... O resto do seu JSX continua exatamente igual ... */}
+      <Toaster 
+        position="top-right"
+        toastOptions={{ duration: 4000 }}
+      />
+      <Header />
+      {user && <PedidoForm onCreatePedido={handleCreatePedido} />}
+      <hr />
+      <h2 className={styles.subTitle}>Pedidos da Comunidade:</h2>
+      {isLoading ? (
+        <p style={{ color: 'white', textAlign: 'center' }}>Carregando pedidos...</p>
+      ) : (
+        <div>
+          {pedidos.map(pedido => (
+            <PedidoCard 
+              key={pedido._id}
+              pedido={pedido}
+              onDelete={handleDeletePedido}
+              onUpdate={handleUpdatePedido}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
-
 
 export default App;
